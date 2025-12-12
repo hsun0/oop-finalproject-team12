@@ -1,7 +1,35 @@
 import gymnasium as gym
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+import argparse
+
+def bfs_shortest_distances(goal_state, grid_size):
+    """Perform BFS to calculate shortest distances from all states to the goal state."""
+    distances = np.full((grid_size, grid_size), np.inf)
+    queue = [(goal_state, 0)]  # (state, distance)
+    visited = set()
+
+    while queue:
+        current, dist = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+        distances[current // grid_size, current % grid_size] = dist
+
+        # Add neighbors (up, down, left, right) to the queue
+        for action in [-1, 1, -grid_size, grid_size]:
+            neighbor = current + action
+            if 0 <= neighbor < grid_size * grid_size and neighbor not in visited:
+                # Ensure valid moves within the grid
+                if action == -1 and current % grid_size == 0:  # Left edge
+                    continue
+                if action == 1 and current % grid_size == grid_size - 1:  # Right edge
+                    continue
+                queue.append((neighbor, dist + 1))
+
+    return distances
 
 
 def print_success_rate(rewards_per_episode):
@@ -12,7 +40,7 @@ def print_success_rate(rewards_per_episode):
     print(f"✅ Success Rate: {success_rate:.2f}% ({int(success_count)} / {total_episodes} episodes)")
     return success_rate
 
-def run(episodes, is_training=True, render=False):
+def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min_exploration_rate=0.0, epsilon=1.0, discount_factor_g=0.9, start_learning_rate_a=0.5, min_learning_rate_a=0.1, learning_decay_rate=0.0001):
 
     env = gym.make('FrozenLake-v1', map_name="8x8", is_slippery=True, render_mode='human' if render else None)
 
@@ -23,10 +51,13 @@ def run(episodes, is_training=True, render=False):
         q = pickle.load(f)
         f.close()
 
-    learning_rate_a = 0.07770472652691994
-    discount_factor_g = 0.99
-    epsilon = 1 
-    epsilon_decay_rate = 7.712588948311775e-05
+    # learning_rate_a = 0.9 # alpha or learning rate
+    # discount_factor_g = 0.9 # gamma or discount rate. Near 0: more weight/reward placed on immediate state. Near 1: more on future state.
+    # epsilon = 1         # 1 = 100% random actions
+    # epsilon_decay_rate = 0.0001        # epsilon decay rate. 1/0.0001 = 10,000
+    start_learning_rate_a = 0.5
+    min_learning_rate_a = 0.1
+    learning_rate_a = start_learning_rate_a
     rng = np.random.default_rng(seed=123)   # random number generator
 
     rewards_per_episode = np.zeros(episodes)
@@ -36,7 +67,11 @@ def run(episodes, is_training=True, render=False):
         terminated = False      # True when fall in hole or reached goal
         truncated = False       # True when actions > 200
 
-        while(not terminated and not truncated):
+        goal_state = 63  # Bottom-right corner
+        grid_size = 8
+        shortest_distances = bfs_shortest_distances(goal_state, grid_size)
+
+        while not terminated and not truncated:
             if is_training and rng.random() < epsilon:
                 action = rng.integers(0, env.action_space.n) # actions: 0=left,1=down,2=right,3=up
             else:
@@ -45,16 +80,21 @@ def run(episodes, is_training=True, render=False):
             new_state,reward,terminated,truncated,_ = env.step(action)
 
             if is_training:
+                if terminated and reward == 0:
+                    distance_to_goal = shortest_distances[new_state // grid_size, new_state % grid_size]
+                    reward += (0.01 / (distance_to_goal + 1))  # Closer to goal gets higher reward
+                    pass
+
+            if is_training:
                 q[state,action] = q[state,action] + learning_rate_a * (
                     reward + discount_factor_g * np.max(q[new_state,:]) - q[state,action]
                 )
 
             state = new_state
 
-        epsilon = max(epsilon - epsilon_decay_rate, 0)
-
-        if(epsilon==0):
-            learning_rate_a = 0.0001
+        epsilon = max(epsilon - epsilon_decay_rate, min_exploration_rate)
+        # print("learning rate:", learning_rate_a)
+        learning_rate_a = max(learning_rate_a - learning_decay_rate, min_learning_rate_a)
 
         if reward == 1:
             rewards_per_episode[i] = 1
@@ -69,6 +109,10 @@ def run(episodes, is_training=True, render=False):
     
     if is_training == False:
         print(print_success_rate(rewards_per_episode))
+        total_episodes = len(rewards_per_episode)
+        success_count = np.sum(rewards_per_episode)
+        success_rate = (success_count / total_episodes) * 100
+        return success_rate
 
     if is_training:
         f = open("frozen_lake8x8.pkl","wb")
@@ -76,7 +120,12 @@ def run(episodes, is_training=True, render=False):
         f.close()
 
 if __name__ == '__main__':
-   
-    run(15000, is_training=True, render=False)
-    test_episodes = 1700
-    run(test_episodes, is_training=False, render=False)
+    min_exploration_rate = 4.6353977133665825e-05
+    epsilon_decay_rate = 0.00011601084539121906
+    discount_factor_g = 0.9881894202149261
+    start_learning_rate_a = 0.2144094441366212
+    min_learning_rate_a = 0.005203841389229674
+    learning_decay_rate = 0.0003221975772656527
+
+    run(15000, is_training=True, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=1.0, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
+    run(750, is_training=False, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=0.02, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
