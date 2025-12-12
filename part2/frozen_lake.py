@@ -5,6 +5,32 @@ import matplotlib.pyplot as plt
 import pickle
 import argparse
 
+def bfs_shortest_distances(goal_state, grid_size):
+    """Perform BFS to calculate shortest distances from all states to the goal state."""
+    distances = np.full((grid_size, grid_size), np.inf)
+    queue = [(goal_state, 0)]  # (state, distance)
+    visited = set()
+
+    while queue:
+        current, dist = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+        distances[current // grid_size, current % grid_size] = dist
+
+        # Add neighbors (up, down, left, right) to the queue
+        for action in [-1, 1, -grid_size, grid_size]:
+            neighbor = current + action
+            if 0 <= neighbor < grid_size * grid_size and neighbor not in visited:
+                # Ensure valid moves within the grid
+                if action == -1 and current % grid_size == 0:  # Left edge
+                    continue
+                if action == 1 and current % grid_size == grid_size - 1:  # Right edge
+                    continue
+                queue.append((neighbor, dist + 1))
+
+    return distances
+
 
 def print_success_rate(rewards_per_episode):
     """Calculate and print the success rate of the agent."""
@@ -32,7 +58,7 @@ def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min
     start_learning_rate_a = 0.5
     min_learning_rate_a = 0.1
     learning_rate_a = start_learning_rate_a
-    rng = np.random.default_rng()   # random number generator
+    rng = np.random.default_rng(seed=123)   # random number generator
 
     rewards_per_episode = np.zeros(episodes)
 
@@ -41,37 +67,11 @@ def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min
         terminated = False      # True when fall in hole or reached goal
         truncated = False       # True when actions > 200
 
-        def bfs_shortest_distances(goal_state, grid_size):
-            """Perform BFS to calculate shortest distances from all states to the goal state."""
-            distances = np.full((grid_size, grid_size), np.inf)
-            queue = [(goal_state, 0)]  # (state, distance)
-            visited = set()
-
-            while queue:
-                current, dist = queue.pop(0)
-                if current in visited:
-                    continue
-                visited.add(current)
-                distances[current // grid_size, current % grid_size] = dist
-
-                # Add neighbors (up, down, left, right) to the queue
-                for action in [-1, 1, -grid_size, grid_size]:
-                    neighbor = current + action
-                    if 0 <= neighbor < grid_size * grid_size and neighbor not in visited:
-                        # Ensure valid moves within the grid
-                        if action == -1 and current % grid_size == 0:  # Left edge
-                            continue
-                        if action == 1 and current % grid_size == grid_size - 1:  # Right edge
-                            continue
-                        queue.append((neighbor, dist + 1))
-
-            return distances
-
         goal_state = 63  # Bottom-right corner
         grid_size = 8
         shortest_distances = bfs_shortest_distances(goal_state, grid_size)
 
-        while(not terminated and not truncated):
+        while not terminated and not truncated:
             if is_training and rng.random() < epsilon:
                 action = rng.integers(0, env.action_space.n) # actions: 0=left,1=down,2=right,3=up
             else:
@@ -120,17 +120,12 @@ def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min
         f.close()
 
 if __name__ == '__main__':
-    min_exploration_rate = 0.0005935994732258189
-    epsilon_decay_rate = 0.00022073098440142171
-    discount_factor_g = 0.9779776722671771
-    start_learning_rate_a = 0.38674403968529697
-    min_learning_rate_a = 0.0021001398462318953
-    learning_decay_rate = 0.00027184353604355613
+    min_exploration_rate = 4.6353977133665825e-05
+    epsilon_decay_rate = 0.00011601084539121906
+    discount_factor_g = 0.9881894202149261
+    start_learning_rate_a = 0.2144094441366212
+    min_learning_rate_a = 0.005203841389229674
+    learning_decay_rate = 0.0003221975772656527
 
-    mean = 0
-    itnum = 10
-    for _ in range(itnum):
-        run(15000, is_training=True, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=1.0, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
-        mean += run(750, is_training=False, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=0.02, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
-    mean /= itnum
-    print(f"Average success rate over {itnum} runs: {mean}%")
+    run(15000, is_training=True, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=1.0, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
+    run(750, is_training=False, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=0.02, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
