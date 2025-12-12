@@ -1,4 +1,6 @@
 import random
+import pickle
+from pathlib import Path
 from collections import deque
 from abc import ABC, abstractmethod
 
@@ -225,3 +227,123 @@ class MovingInCirclesAgent(BaseAgent):
         bx, by = b
         dx, dy = bx - ax, by - ay
         return self.dir_to_action((dx, dy))
+
+class ReinforcementLearningAgent(BaseAgent):
+    def __init__(self, epsilon: float = 0.1, alpha: float = 0.5, gamma: float = 0.95, model_path: str | None = "./rl_agent.pkl"):
+        super().__init__("Reinforcement Learning Agent")
+        # 預設參數
+        self.epsilon = epsilon
+        self.alpha = alpha
+        self.gamma = gamma
+        # Q 表：鍵為 (state_key, action)
+        self.Q: dict[tuple, float] = {}
+        # 暫存上一個轉移，用於外部呼叫 update
+        self._last_state = None
+        self._last_action = None
+        # 嘗試自動載入模型（若指定路徑存在）
+        try:
+            if model_path and Path(model_path).exists():
+                with open(model_path, "rb") as f:
+                    payload = pickle.load(f)
+                self.Q = payload.get("Q", {})
+                self.epsilon = payload.get("epsilon", self.epsilon)
+                self.alpha = payload.get("alpha", self.alpha)
+                self.gamma = payload.get("gamma", self.gamma)
+                # 載入成功提示（避免在 headless 下過度輸出，可視需求調整）
+                # print(f"[RL] Loaded model from {model_path} | Q entries: {len(self.Q)}")
+        except Exception:
+            # 失敗則維持預設參數與空 Q
+            pass
+
+    def _state_key(self, obs) -> tuple:
+        # 將觀察壓縮成一個可哈希的鍵；為簡化僅使用頭與食物位置
+        head = tuple(obs['head'])
+        food = tuple(obs['food'])
+        return (head, food)
+
+    def _q(self, state_key, action) -> float:
+        return self.Q.get((state_key, action), 0.0)
+
+    def _set_q(self, state_key, action, value: float):
+        self.Q[(state_key, action)] = value
+
+    def select_action(self, obs):
+        # 取得安全動作；若無安全動作則隨機
+        safe = self.safe_actions(obs)
+        if not safe:
+            action = random.randint(0, 3)
+            self._last_state = self._state_key(obs)
+            self._last_action = action
+            return action
+
+        state_key = self._state_key(obs)
+
+        # epsilon-greedy 探索
+        if random.random() < self.epsilon:
+            action = random.choice(safe)
+            self._last_state = state_key
+            self._last_action = action
+            return action
+
+        # 選擇 Q 值最高的安全動作
+        best_action = safe[0]
+        best_value = self._q(state_key, best_action)
+        for a in safe[1:]:
+            qv = self._q(state_key, a)
+            if qv > best_value:
+                best_value = qv
+                best_action = a
+
+        self._last_state = state_key
+        self._last_action = best_action
+        return best_action
+
+    def update(self, reward: float, next_obs, done: bool):
+        """外部可呼叫的 Q-learning 更新。需要在環境 step 後提供 reward/next_obs/done。
+
+        用法（可選）：在 runner 中於 env.step(action) 後呼叫：
+            agent.update(reward, next_obs, terminated or truncated)
+        若不呼叫，Agent 仍可運作，但不會學習。
+        """
+        if self._last_state is None or self._last_action is None:
+            return
+
+        s = self._last_state
+        a = self._last_action
+        s_next = self._state_key(next_obs)
+
+        # 計算 max_a' Q(s', a')
+        # 僅考慮安全動作以避免立刻死亡的行為
+        safe_next = self.safe_actions(next_obs)
+        max_q_next = 0.0
+        if safe_next:
+            max_q_next = max(self._q(s_next, ap) for ap in safe_next)
+
+        # Q-learning 更新
+        old_q = self._q(s, a)
+        target = reward + (0.0 if done else self.gamma * max_q_next)
+        new_q = old_q + self.alpha * (target - old_q)
+        self._set_q(s, a, new_q)
+
+    # 便利方法：儲存/載入模型
+    def save_model(self, model_path: str = "./rl_agent.pkl"):
+        payload = {
+            "Q": self.Q,
+            "epsilon": self.epsilon,
+            "alpha": self.alpha,
+            "gamma": self.gamma,
+        }
+        Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(model_path, "wb") as f:
+            pickle.dump(payload, f)
+
+    def load_model(self, model_path: str = "./rl_agent.pkl"):
+        if not Path(model_path).exists():
+            return False
+        with open(model_path, "rb") as f:
+            payload = pickle.load(f)
+        self.Q = payload.get("Q", {})
+        self.epsilon = payload.get("epsilon", self.epsilon)
+        self.alpha = payload.get("alpha", self.alpha)
+        self.gamma = payload.get("gamma", self.gamma)
+        return True
