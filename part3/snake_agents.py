@@ -10,6 +10,58 @@ class BaseAgent(ABC):
     def select_action(self, obs):
         pass
 
+    def action_to_dir(self, action: int) -> tuple[int, int]:
+        mapping = {
+            0: (0, -1),  # Up
+            1: (0, 1),   # Down
+            2: (-1, 0),  # Left
+            3: (1, 0),   # Right
+        }
+        return mapping.get(action, (0, 0))
+
+    def dir_to_action(self, dir: tuple[int, int]) -> int:
+        reverse = {
+            (0, -1): 0,
+            (0, 1): 1,
+            (-1, 0): 2,
+            (1, 0): 3,
+        }
+        return reverse.get(tuple(dir), random.randint(0, 3))
+    
+    def head_valid(self, obs, dir: tuple[int, int]) -> bool:
+        head = obs['head']
+        body = obs['body']
+        w, h = obs['grid_size']
+        x, y = head[0] + dir[0], head[1] + dir[1]
+        if not (0 <= x < w and 0 <= y < h):
+            return False
+        if (x, y) in body:
+            return False
+        return True
+
+    def neighbors(self, head: tuple[int, int]):
+        """回傳四鄰居 (位置, 對應動作碼, 方向向量)"""
+        for action in [0, 1, 2, 3]:
+            dx, dy = self.action_to_dir(action)
+            yield (head[0] + dx, head[1] + dy), action, (dx, dy)
+
+    def safe_actions(self, obs):
+        """回傳在當前觀察下的安全動作列表"""
+        safe = []
+        for action in [0, 1, 2, 3]:
+            dir_vec = self.action_to_dir(action)
+            if self.head_valid(obs, dir_vec):
+                safe.append(action)
+        return safe
+
+    def manhattan(self, a: tuple[int, int], b: tuple[int, int]) -> int:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def safe_fallback(self, obs):
+        """選擇任一安全動作；若沒有則隨機動作"""
+        safe = self.safe_actions(obs)
+        return random.choice(safe) if safe else random.randint(0, 3)
+
 class RandomAgent(BaseAgent):
     def __init__(self):
         super().__init__("Random Agent")
@@ -23,17 +75,24 @@ class GreedyAgent(BaseAgent):
         super().__init__("Greedy Agent")
 
     def select_action(self, obs):
-        hx, hy = obs['head']
-        fx, fy = obs['food']
+        head = tuple(obs['head'])
+        food = tuple(obs['food'])
 
-        # 簡單邏輯：先縮短 X 軸距離，再縮短 Y 軸
-        # 0=Up, 1=Down, 2=Left, 3=Right
-        if hx > fx: return 2 # 往左
-        if hx < fx: return 3 # 往右
-        if hy > fy: return 0 # 往上
-        if hy < fy: return 1 # 往下
-        
-        return random.randint(0, 3) # 如果重疊(理論上不會)就隨機
+        # 只在安全動作中選擇「使距離食物最近」的動作
+        safe = self.safe_actions(obs)
+        if not safe:
+            return random.randint(0, 3)
+
+        best_action = safe[0]
+        best_dist = float('inf')
+        for action in safe:
+            dx, dy = self.action_to_dir(action)
+            nx, ny = head[0] + dx, head[1] + dy
+            d = self.manhattan((nx, ny), food)
+            if d < best_dist:
+                best_dist = d
+                best_action = action
+        return best_action
 
 class RuleBasedAgent(BaseAgent):
     def __init__(self):
@@ -42,51 +101,27 @@ class RuleBasedAgent(BaseAgent):
     def select_action(self, obs):
         head = obs['head']
         food = obs['food']
-        body = obs['body']
-        w, h = obs['grid_size']
 
-        possible_moves = [0, 1, 2, 3] # Up, Down, Left, Right
+        # 1) 先找所有安全動作
         safe_moves = []
+        for action in [0, 1, 2, 3]:
+            dir_vec = self.action_to_dir(action)
+            if self.head_valid(obs, dir_vec):
+                safe_moves.append(action)
 
-        # 1. 篩選出不會立刻撞牆或撞身體的動作
-        for action in possible_moves:
-            nx, ny = head
-            if action == 0: ny -= 1
-            elif action == 1: ny += 1
-            elif action == 2: nx -= 1
-            elif action == 3: nx += 1
-
-            # 檢查邊界
-            if not (0 <= nx < w and 0 <= ny < h):
-                continue
-            # 檢查身體 (只要不在身體list裡就是安全的)
-            if (nx, ny) in body:
-                continue
-                
-            safe_moves.append(action)
-
-        # 如果無路可走，只好等死 (或隨機選一個)
         if not safe_moves:
             return random.randint(0, 3)
 
-        # 2. 在安全動作中，選擇離食物最近的 (貪婪策略)
+        # 2) 在安全動作中，選擇離食物最近的 (貪婪)
         best_action = safe_moves[0]
         min_dist = float('inf')
-
         for action in safe_moves:
-            nx, ny = head
-            if action == 0: ny -= 1
-            elif action == 1: ny += 1
-            elif action == 2: nx -= 1
-            elif action == 3: nx += 1
-            
-            # 計算曼哈頓距離
+            dx, dy = self.action_to_dir(action)
+            nx, ny = head[0] + dx, head[1] + dy
             dist = abs(nx - food[0]) + abs(ny - food[1])
-            
             if dist < min_dist:
                 min_dist = dist
                 best_action = action
-        
         return best_action
 
 
@@ -117,37 +152,76 @@ class PathfindingAgent(BaseAgent):
             pos, path = queue.popleft()
             if pos == goal:
                 return path
-            for nx, ny in self._neighbors(pos, w, h):
+
+            for (nx, ny), _action, _dir in self.neighbors(pos):
+                if not (0 <= nx < w and 0 <= ny < h):
+                    continue
                 if (nx, ny) in blocked or (nx, ny) in visited:
                     continue
                 visited.add((nx, ny))
                 queue.append(((nx, ny), path + [(nx, ny)]))
         return []
 
-    def _neighbors(self, pos, w, h):
-        x, y = pos
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < w and 0 <= ny < h:
-                yield nx, ny
 
     def _direction_from_step(self, head, target):
         hx, hy = head
         tx, ty = target
-        if ty < hy:
-            return 0  # Up
-        if ty > hy:
-            return 1  # Down
-        if tx < hx:
-            return 2  # Left
-        return 3      # Right
+        dx, dy = tx - hx, ty - hy
+        return self.dir_to_action((dx, dy))
 
     def _safe_fallback(self, head, blocked, w, h):
-        safe_moves = []
-        for action, (dx, dy) in enumerate([(0, -1), (0, 1), (-1, 0), (1, 0)]):
-            nx, ny = head[0] + dx, head[1] + dy
-            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in blocked:
-                safe_moves.append(action)
-        if safe_moves:
-            return random.choice(safe_moves)
-        return random.randint(0, 3)
+        pseudo_obs = {
+            'head': head,
+            'body': list(blocked),
+            'grid_size': (w, h),
+        }
+        return self.safe_fallback(pseudo_obs)
+
+class MovingInCirclesAgent(BaseAgent):
+    def __init__(self):
+        super().__init__("Hamiltonian Cycle Agent")
+        self.cycle = None
+        self.next_pos = None
+
+    def select_action(self, obs):
+        head = tuple(obs["head"])
+        w, h = obs["grid_size"]
+
+        if self.cycle is None:
+            assert w % 2 == 0, "Hamiltonian cycle requires even width or height"
+            self.cycle = self._build_hamiltonian_cycle(w, h)
+            self.next_pos = {
+                self.cycle[i]: self.cycle[(i + 1) % len(self.cycle)]
+                for i in range(len(self.cycle))
+            }
+
+        target = self.next_pos[head]
+        return self.direction_from_to(head, target)
+
+    def _build_hamiltonian_cycle(self, w, h):
+        """
+        真正的哈密頓「環」
+        假設 w 是偶數
+        """
+        path = []
+
+        # 1. 從 (0,0) 往下走最左邊一整欄
+        for y in range(h):
+            path.append((0, y))
+
+        # 2. 其餘區域做蛇形掃描（避開 x=0）
+        for y in reversed(range(h)):
+            if (h - y) % 2 == 1:
+                xs = range(1, w)
+            else:
+                xs = reversed(range(1, w))
+            for x in xs:
+                path.append((x, y))
+
+        return path  # 首尾相鄰，自然成環
+
+    def direction_from_to(self, a, b):
+        ax, ay = a
+        bx, by = b
+        dx, dy = bx - ax, by - ay
+        return self.dir_to_action((dx, dy))

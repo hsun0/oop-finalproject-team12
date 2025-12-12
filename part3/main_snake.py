@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Type
 
 from snake_env import SnakeEnv
-from snake_agents import RandomAgent, GreedyAgent, RuleBasedAgent, PathfindingAgent
+from snake_agents import RandomAgent, GreedyAgent, RuleBasedAgent, PathfindingAgent, MovingInCirclesAgent
 
 
 @dataclass
@@ -44,13 +44,14 @@ class GameRunner:
 
 
 def run_demo():
-    runner = GameRunner(render=True)
+    runner = GameRunner(render=False)
 
     scripts = [
         ("1. Random Agent", RandomAgent, 1),
         ("2. Greedy Agent", GreedyAgent, 1),
         ("3. Rule-Based Agent", RuleBasedAgent, 1),
-        ("4. Pathfinding Agent (BFS)", PathfindingAgent, 2),
+        ("4. Pathfinding Agent (BFS)", PathfindingAgent, 1),
+        ("5. Moving In Circles Agent", MovingInCirclesAgent, 1),
     ]
 
     for title, agent_cls, episodes in scripts:
