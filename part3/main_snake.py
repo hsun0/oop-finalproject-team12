@@ -5,8 +5,15 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Type
 
-from snake_env import SnakeEnv
-from snake_agents import *
+from tools.snake_env import SnakeEnv
+from snake_agents import (
+    RandomAgent,
+    GreedyAgent,
+    RuleBasedAgent,
+    PathfindingAgent,
+    HamiltonianCycleAgent,
+    ReinforcementLearningAgent,
+)
 
 
 @dataclass
@@ -21,8 +28,8 @@ class GameRunner:
         self.render = render
         self.obstacles = obstacles
 
-    def play(self, agent_cls, episodes= 1):
-        env = SnakeEnv(render_mode="human" if self.render else None, enable_obstacles=self.obstacles)
+    def play(self, agent_cls, episodes= 1, evolution_mode: str | None = None):
+        env = SnakeEnv(render_mode="human" if self.render else None, enable_obstacles=self.obstacles, evolution_mode=evolution_mode)
         agent = agent_cls()
         print(f"Agent: {agent.name} ")
 
@@ -53,12 +60,12 @@ class GameRunner:
         return results
 
 
-def train_rl(model_path: str = "./rl_agent.pkl", episodes: int = 1000, epsilon: float = 0.2, alpha: float = 0.5, gamma: float = 0.95, epsilon_decay: float = 0.995, render: bool = False, obstacles: bool = False):
+def train_rl(model_path: str = "./rl_agent.pkl", episodes: int = 1000, epsilon: float = 0.2, alpha: float = 0.5, gamma: float = 0.95, epsilon_decay: float = 0.995, render: bool = False, obstacles: bool = False, evolution_mode: str | None = None):
     """
     訓練 ReinforcementLearningAgent，並將學到的 Q-table 與設定儲存到檔案。
     保持 run_demo 不變，僅新增此訓練函式。
     """
-    env = SnakeEnv(render_mode="human" if render else None, enable_obstacles=obstacles)
+    env = SnakeEnv(render_mode="human" if render else None, enable_obstacles=obstacles, evolution_mode=evolution_mode)
 
     agent = ReinforcementLearningAgent(
         epsilon_start=epsilon,
@@ -99,21 +106,21 @@ def train_rl(model_path: str = "./rl_agent.pkl", episodes: int = 1000, epsilon: 
     print(f"模型已儲存至: {model_path}")
 
 
-def run_demo(obstacles: bool = False, render: bool = False):
+def run_demo(obstacles: bool = False, render: bool = False, evolution_mode: str | None = None):
     runner = GameRunner(render=render, obstacles=obstacles)
 
     scripts = [
-        ("1. Random Agent", RandomAgent, 1),
+        ("1. Random Agent", RandomAgent, 0),
         ("2. Greedy Agent", GreedyAgent, 1),
         ("3. Rule-Based Agent", RuleBasedAgent, 1),
         ("4. Pathfinding Agent (BFS)", PathfindingAgent, 1),
-        ("5. Moving In Circles Agent", MovingInCirclesAgent, 1),
+        ("5. Hamiltonian Cycle Agent", HamiltonianCycleAgent, 1),
         ("6. Reinforcement Learning Agent", ReinforcementLearningAgent, 1),
     ]
 
     for title, agent_cls, episodes in scripts:
         print(f"\n{title}")
-        runner.play(agent_cls, episodes=episodes)
+        runner.play(agent_cls, episodes=episodes, evolution_mode=evolution_mode)
 
 
 if __name__ == "__main__":
@@ -127,10 +134,11 @@ if __name__ == "__main__":
     parser.add_argument("--gamma", type=float, default=0.95)
     parser.add_argument("--epsilon-decay", type=float, default=0.995)
     parser.add_argument("--render", action="store_true", help="訓練時顯示動畫")
+    parser.add_argument("--evolution", choices=["conway", "none"], default="conway", help="選擇障礙物演化策略")
     args = parser.parse_args()
 
     if args.mode == "demo":
-        run_demo(obstacles=args.obstacles, render=args.render)
+        run_demo(obstacles=args.obstacles, render=args.render, evolution_mode=args.evolution)
     else:
         train_rl(
             model_path=args.model_path,
@@ -141,6 +149,7 @@ if __name__ == "__main__":
             epsilon_decay=args.epsilon_decay,
             render=args.render,
             obstacles=args.obstacles,
+            evolution_mode=args.evolution,
         )
 
 # python3 main_snake.py --mode train --episodes 10000
