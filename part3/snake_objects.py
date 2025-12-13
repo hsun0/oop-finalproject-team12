@@ -90,6 +90,8 @@ class Food(GridObject):
     def __init__(self, grid_width, grid_height):
         super().__init__(grid_width, grid_height)
         self.position = (0, 0)
+        self.value = 1  # 預設分數
+        self.color = (255, 0, 0)  # 預設紅色
 
     def reset(self):
         # 食物的 reset 讓呼叫者決定位置，這裡設為原點以防未初始化
@@ -107,6 +109,20 @@ class Food(GridObject):
             if (x, y) not in blocked:
                 self.position = (x, y)
                 break
+
+
+class RedFood(Food):
+    def __init__(self, grid_width, grid_height):
+        super().__init__(grid_width, grid_height)
+        self.value = 1
+        self.color = (255, 0, 0)  # 紅色
+
+
+class GoldFood(Food):
+    def __init__(self, grid_width, grid_height):
+        super().__init__(grid_width, grid_height)
+        self.value = 2
+        self.color = (255, 215, 0)  # 金色
 
 
 class Obstacle(GridObject):

@@ -1,9 +1,10 @@
 import gymnasium as gym
 from gymnasium import spaces
 import pygame
+import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from snake_objects import Snake, Food, Obstacle
+from snake_objects import Snake, RedFood, GoldFood, Obstacle
 
 class RewardPolicy(ABC):
     """Strategy interface to compute rewards/termination for each step."""
@@ -58,9 +59,10 @@ class Renderer:
         self.window.fill((0, 0, 0))
 
         fx, fy = food.position
+        food_color = getattr(food, "color", (255, 0, 0))
         pygame.draw.rect(
             self.window,
-            (255, 0, 0),
+            food_color,
             (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
         )
 
@@ -98,6 +100,8 @@ class SnakeEnv(gym.Env):
         max_steps=None,
         step_penalty=-0.01,
         reward_policy: RewardPolicy | None = None,
+        gold_prob: float = 0.2,
+        enable_obstacles: bool = False,
     ):
         super().__init__()
         self.grid_size = grid_size # 網格數量 (20x20)
@@ -126,14 +130,22 @@ class SnakeEnv(gym.Env):
 
         # 初始化物件
         self.snake = Snake(self.grid_size, self.grid_size)
-        self.food = Food(self.grid_size, self.grid_size)
-        self.obstacles = Obstacle(self.grid_size, self.grid_size)
+        self.gold_prob = max(0.0, min(1.0, gold_prob))
+        self.food = self._spawn_food()
+        self.obstacles = Obstacle(
+            self.grid_size,
+            self.grid_size,
+            max_obstacles=10 if enable_obstacles else 0,
+            spawn_chance=0.05 if enable_obstacles else 0.0,
+            despawn_chance=0.02 if enable_obstacles else 0.0,
+        )
         self.renderer = Renderer(self.grid_size, self.cell_size, self.metadata["render_fps"]) if render_mode == "human" else None
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.snake.reset()
         self.obstacles.reset()
+        self.food = self._spawn_food()
         self.food.respawn(self.snake.body, self.obstacles.positions)
         self.score = 0
         self.steps = 0
@@ -160,8 +172,10 @@ class SnakeEnv(gym.Env):
         if not died and self.snake.head == self.food.position:
             ate_food = True
             self.snake.grow()
+            self.score += getattr(self.food, "value", 1)
+            # 吃完後生成新的食物（可能是紅或金）
+            self.food = self._spawn_food()
             self.food.respawn(self.snake.body, self.obstacles.positions)
-            self.score += 1
 
         reward, terminated, truncated = self.reward_policy.compute(
             ate_food=ate_food,
@@ -194,3 +208,9 @@ class SnakeEnv(gym.Env):
     def close(self):
         if self.renderer:
             self.renderer.close()
+
+    def _spawn_food(self):
+        """依機率生成紅色或金色食物的實例。"""
+        if random.random() < self.gold_prob:
+            return GoldFood(self.grid_size, self.grid_size)
+        return RedFood(self.grid_size, self.grid_size)
