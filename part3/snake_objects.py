@@ -95,13 +95,50 @@ class Food(GridObject):
         # 食物的 reset 讓呼叫者決定位置，這裡設為原點以防未初始化
         self.position = (0, 0)
     
-    def respawn(self, snake_body):
-        """
-        隨機生成食物，確保不會生成在蛇身上
-        """
+    def respawn(self, snake_body, forbidden_positions=None):
+        """隨機生成食物，確保不會生成在蛇身或障礙物上。"""
+        blocked = set(snake_body)
+        if forbidden_positions:
+            blocked |= {tuple(p) for p in forbidden_positions}
+
         while True:
             x = random.randint(0, self.w - 1)
             y = random.randint(0, self.h - 1)
-            if (x, y) not in snake_body:
+            if (x, y) not in blocked:
                 self.position = (x, y)
                 break
+
+
+class Obstacle(GridObject):
+
+    def __init__(self, grid_width, grid_height, max_obstacles=10, spawn_chance=0.05, despawn_chance=0.02):
+        super().__init__(grid_width, grid_height)
+        self.max_obstacles = max_obstacles
+        self.spawn_chance = spawn_chance
+        self.despawn_chance = despawn_chance
+        self.positions = set()
+
+    def reset(self):
+        self.positions.clear()
+
+    def update(self, snake_body, food_pos):
+        # 隨機移除一個障礙物
+        if self.positions and random.random() < self.despawn_chance:
+            self.positions.pop()
+
+        # 隨機新增障礙物
+        if len(self.positions) >= self.max_obstacles:
+            return
+
+        if random.random() < self.spawn_chance:
+            blocked = set(snake_body) | self.positions | {tuple(food_pos)} # 避免生成在這些位置
+            for _ in range(20):  # 最多嘗試幾次
+                x = random.randint(0, self.w - 1)
+                y = random.randint(0, self.h - 1)
+                pos = (x, y)
+                if pos not in blocked:
+                    self.positions.add(pos)
+                    break
+
+    def check_collision(self, pos):
+        return tuple(pos) in self.positions
