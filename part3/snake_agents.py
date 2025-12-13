@@ -234,10 +234,22 @@ class MovingInCirclesAgent(BaseAgent):
         return self.dir_to_action((dx, dy))
 
 class ReinforcementLearningAgent(BaseAgent):
-    def __init__(self, epsilon: float = 0.1, alpha: float = 0.5, gamma: float = 0.95, model_path: str | None = "./rl_agent.pkl"):
+    def __init__(
+        self,
+        epsilon_start: float = 0.1,
+        epsilon_min: float = 0.01,
+        alpha: float = 0.5,
+        gamma: float = 0.95,
+        model_path: str | None = "./rl_agent.pkl",
+        eps_decay_ratio: float = 0.5,
+        total_training_steps: int | None = None,
+    ):
         super().__init__("Reinforcement Learning Agent")
-        # 預設參數
-        self.epsilon = epsilon
+        # 探索率參數
+        self.epsilon_start = epsilon_start
+        self.epsilon_min = epsilon_min
+        self.epsilon = epsilon_start
+        # 學習率/折扣率
         self.alpha = alpha
         self.gamma = gamma
         # Q 表：鍵為 (state_key, action)
@@ -245,23 +257,44 @@ class ReinforcementLearningAgent(BaseAgent):
         # 暫存上一個轉移，用於外部呼叫 update
         self._last_state = None
         self._last_action = None
+        # 衰減控制：隨總訓練步數而變動
+        self.eps_decay_ratio = eps_decay_ratio  # 衰減步數 = total_steps * ratio
+        self.total_training_steps = total_training_steps
+        self._t = 0  # 目前已更新的步數（呼叫 update 次數）
+
         # 嘗試自動載入模型（若指定路徑存在）
         try:
             if model_path and Path(model_path).exists():
                 with open(model_path, "rb") as f:
                     payload = pickle.load(f)
                 self.Q = payload.get("Q", {})
+                # 若模型有存 epsilon 資訊則載入，否則維持初始化值
                 self.epsilon = payload.get("epsilon", self.epsilon)
+                self.epsilon_start = payload.get("epsilon_start", self.epsilon_start)
+                self.epsilon_min = payload.get("epsilon_min", self.epsilon_min)
                 self.alpha = payload.get("alpha", self.alpha)
                 self.gamma = payload.get("gamma", self.gamma)
-                # 載入成功提示（避免在 headless 下過度輸出，可視需求調整）
-                # print(f"[RL] Loaded model from {model_path} | Q entries: {len(self.Q)}")
+                self.eps_decay_ratio = payload.get("eps_decay_ratio", self.eps_decay_ratio)
+                self.total_training_steps = payload.get("total_training_steps", self.total_training_steps)
+                self._t = payload.get("_t", self._t)
         except Exception:
-            # 失敗則維持預設參數與空 Q
             pass
 
+    def set_total_training_steps(self, total_steps: int):
+        """外部設定預計總訓練步數（例如 episodes * steps_per_episode）。"""
+        self.total_training_steps = max(1, int(total_steps))
+
+    def _update_epsilon(self):
+        """根據已訓練步數與總步數線性衰減 epsilon。"""
+        # 決定衰減步數：總步數 * ratio；若未知總步數，給一個合理預設
+        decay_steps = int((self.total_training_steps or 10000) * self.eps_decay_ratio)
+        decay_steps = max(1, decay_steps)
+
+        # 線性衰減到 epsilon_min
+        progress = min(1.0, self._t / decay_steps)
+        self.epsilon = self.epsilon_min + (self.epsilon_start - self.epsilon_min) * (1.0 - progress)
+
     def _state_key(self, obs) -> tuple:
-        # 將觀察壓縮成一個可哈希的鍵；為簡化僅使用頭與食物位置
         head = tuple(obs['head'])
         food = tuple(obs['food'])
         return (head, food)
@@ -304,12 +337,7 @@ class ReinforcementLearningAgent(BaseAgent):
         return best_action
 
     def update(self, reward: float, next_obs, done: bool):
-        """外部可呼叫的 Q-learning 更新。需要在環境 step 後提供 reward/next_obs/done。
-
-        用法（可選）：在 runner 中於 env.step(action) 後呼叫：
-            agent.update(reward, next_obs, terminated or truncated)
-        若不呼叫，Agent 仍可運作，但不會學習。
-        """
+        """在環境 step 後呼叫以進行 Q-learning 更新與 epsilon 衰減。"""
         if self._last_state is None or self._last_action is None:
             return
 
@@ -318,7 +346,6 @@ class ReinforcementLearningAgent(BaseAgent):
         s_next = self._state_key(next_obs)
 
         # 計算 max_a' Q(s', a')
-        # 僅考慮安全動作以避免立刻死亡的行為
         safe_next = self.safe_actions(next_obs)
         max_q_next = 0.0
         if safe_next:
@@ -330,13 +357,22 @@ class ReinforcementLearningAgent(BaseAgent):
         new_q = old_q + self.alpha * (target - old_q)
         self._set_q(s, a, new_q)
 
+        # 步數累計與 epsilon 衰減
+        self._t += 1
+        self._update_epsilon()
+
     # 便利方法：儲存/載入模型
     def save_model(self, model_path: str = "./rl_agent.pkl"):
         payload = {
             "Q": self.Q,
             "epsilon": self.epsilon,
+            "epsilon_start": self.epsilon_start,
+            "epsilon_min": self.epsilon_min,
             "alpha": self.alpha,
             "gamma": self.gamma,
+            "eps_decay_ratio": self.eps_decay_ratio,
+            "total_training_steps": self.total_training_steps,
+            "_t": self._t,
         }
         Path(model_path).parent.mkdir(parents=True, exist_ok=True)
         with open(model_path, "wb") as f:
@@ -349,6 +385,11 @@ class ReinforcementLearningAgent(BaseAgent):
             payload = pickle.load(f)
         self.Q = payload.get("Q", {})
         self.epsilon = payload.get("epsilon", self.epsilon)
+        self.epsilon_start = payload.get("epsilon_start", self.epsilon_start)
+        self.epsilon_min = payload.get("epsilon_min", self.epsilon_min)
         self.alpha = payload.get("alpha", self.alpha)
         self.gamma = payload.get("gamma", self.gamma)
+        self.eps_decay_ratio = payload.get("eps_decay_ratio", self.eps_decay_ratio)
+        self.total_training_steps = payload.get("total_training_steps", self.total_training_steps)
+        self._t = payload.get("_t", self._t)
         return True
