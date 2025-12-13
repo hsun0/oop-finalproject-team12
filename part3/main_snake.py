@@ -17,7 +17,7 @@ class EpisodeResult:
 
 class GameRunner:
 
-    def __init__(self, render = True, obstacles: bool = False):
+    def __init__(self, render = False, obstacles: bool = False):
         self.render = render
         self.obstacles = obstacles
 
@@ -99,8 +99,8 @@ def train_rl(model_path: str = "./rl_agent.pkl", episodes: int = 1000, epsilon: 
     print(f"模型已儲存至: {model_path}")
 
 
-def run_demo(obstacles: bool = False):
-    runner = GameRunner(render=False, obstacles=obstacles)
+def run_demo(obstacles: bool = False, render: bool = False):
+    runner = GameRunner(render=render, obstacles=obstacles)
 
     scripts = [
         ("1. Random Agent", RandomAgent, 1),
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mode == "demo":
-        run_demo(obstacles=args.obstacles)
+        run_demo(obstacles=args.obstacles, render=args.render)
     else:
         train_rl(
             model_path=args.model_path,

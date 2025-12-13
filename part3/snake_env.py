@@ -66,11 +66,17 @@ class Renderer:
             (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
         )
 
-        # 畫障礙物
-        for ox, oy in obstacles:
+        # 畫障礙物（支援彩色）
+        for item in obstacles:
+            # 支援兩種格式：((x,y), color) 或 (x,y)
+            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], tuple):
+                (ox, oy), col = item
+            else:
+                ox, oy = item
+                col = (100, 100, 100)
             pygame.draw.rect(
                 self.window,
-                (100, 100, 100),
+                col,
                 (ox * self.cell_size, oy * self.cell_size, self.cell_size, self.cell_size),
             )
 
@@ -203,7 +209,7 @@ class SnakeEnv(gym.Env):
 
     def render(self):
         if self.renderer:
-            self.renderer.draw(self.snake, self.food, self.obstacles.positions)
+            self.renderer.draw(self.snake, self.food, self.obstacles.get_colored_cells())
 
     def close(self):
         if self.renderer:

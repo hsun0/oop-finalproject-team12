@@ -127,34 +127,97 @@ class GoldFood(Food):
 
 class Obstacle(GridObject):
 
-    def __init__(self, grid_width, grid_height, max_obstacles=10, spawn_chance=0.05, despawn_chance=0.02):
+    def __init__(self, grid_width, grid_height, max_obstacles=8, spawn_chance=0.05, despawn_chance=0.02):
         super().__init__(grid_width, grid_height)
         self.max_obstacles = max_obstacles
         self.spawn_chance = spawn_chance
         self.despawn_chance = despawn_chance
+        # 目前所有障礙物的 cell 集合（快取）
         self.positions = set()
+        # 以物件為單位管理；每個物件包含 cells 與 color
+        self.objects: list[dict] = []
+        # 生成型態的機率分佈：單格 / 垂直三格 / 水平三格
+        self.shape_probs = {
+            SingleObstacle: 0.5,
+            Vertical3Obstacle: 0.25,
+            Horizontal3Obstacle: 0.25,
+        }
 
     def reset(self):
         self.positions.clear()
+        self.objects.clear()
 
     def update(self, snake_body, food_pos):
-        # 隨機移除一個障礙物
-        if self.positions and random.random() < self.despawn_chance:
-            self.positions.pop()
+        # 隨機移除一整個障礙物（以物件為單位）
+        if self.objects and random.random() < self.despawn_chance:
+            idx = random.randrange(0, len(self.objects))
+            removed = self.objects.pop(idx)
+            for cell in removed["cells"]:
+                if cell in self.positions:
+                    self.positions.remove(cell)
 
-        # 隨機新增障礙物
+        # 隨機新增障礙物：容量依據佔據的格子數量
         if len(self.positions) >= self.max_obstacles:
             return
 
         if random.random() < self.spawn_chance:
             blocked = set(snake_body) | self.positions | {tuple(food_pos)} # 避免生成在這些位置
-            for _ in range(20):  # 最多嘗試幾次
+            shape_cls = self._sample_shape_class()
+            shape_obj = shape_cls(self.w, self.h)
+            for _ in range(50):  # 最多嘗試幾次
                 x = random.randint(0, self.w - 1)
                 y = random.randint(0, self.h - 1)
-                pos = (x, y)
-                if pos not in blocked:
-                    self.positions.add(pos)
+                cells = shape_obj.shape_cells(x, y)
+                if not cells:
+                    continue
+                # 確保所有格子合法且不碰撞
+                if all((0 <= cx < self.w and 0 <= cy < self.h and (cx, cy) not in blocked) for (cx, cy) in cells):
+                    # 加入為一個獨立障礙物（不可與既有重疊）
+                    obj = {"cells": cells, "color": getattr(shape_obj, "color", (120, 120, 120))}
+                    self.objects.append(obj)
+                    for cell in cells:
+                        self.positions.add(cell)
                     break
 
     def check_collision(self, pos):
         return tuple(pos) in self.positions
+
+    def get_colored_cells(self):
+        """展平成 [(cell, color), ...] 供 renderer 使用。"""
+        colored = []
+        for obj in self.objects:
+            col = obj.get("color", (120, 120, 120))
+            for cell in obj.get("cells", []):
+                colored.append((cell, col))
+        return colored
+
+    def _sample_shape_class(self):
+        r = random.random()
+        acc = 0.0
+        for cls, p in self.shape_probs.items():
+            acc += p
+            if r < acc:
+                return cls
+        return SingleObstacle
+
+    # Base implementation (single cell); subclasses override
+    def shape_cells(self, x: int, y: int):
+        return [(x, y)]
+
+
+class SingleObstacle(Obstacle):
+    def shape_cells(self, x: int, y: int):
+        return [(x, y)]
+    color = (160, 160, 160)  # 淺灰
+
+
+class Vertical3Obstacle(Obstacle):
+    def shape_cells(self, x: int, y: int):
+        return [(x, y), (x, y+1), (x+1, y)]
+    color = (100, 149, 237)  # CornflowerBlue
+
+
+class Horizontal3Obstacle(Obstacle):
+    def shape_cells(self, x: int, y: int):
+        return [(x, y), (x+1, y), (x, y+1), (x+1, y+1)]
+    color = (200, 200, 60)  # 深紅
