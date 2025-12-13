@@ -101,7 +101,7 @@ class SnakeEnv(gym.Env):
 
     def __init__(
         self,
-        grid_size=20,
+        grid_size=30,
         render_mode=None,
         max_steps=None,
         step_penalty=-0.01,
@@ -141,9 +141,9 @@ class SnakeEnv(gym.Env):
         self.obstacles = Obstacle(
             self.grid_size,
             self.grid_size,
-            max_obstacles=10 if enable_obstacles else 0,
-            spawn_chance=0.05 if enable_obstacles else 0.0,
-            despawn_chance=0.02 if enable_obstacles else 0.0,
+            max_obstacles=40 if enable_obstacles else 0,
+            spawn_chance=0.12 if enable_obstacles else 0.0,
+            despawn_chance=0.06 if enable_obstacles else 0.0,
         )
         self.renderer = Renderer(self.grid_size, self.cell_size, self.metadata["render_fps"]) if render_mode == "human" else None
 
@@ -166,6 +166,9 @@ class SnakeEnv(gym.Env):
 
         # 更新障礙物
         self.obstacles.update(self.snake.body, self.food.position)
+        # 若食物被障礙物覆蓋，移除並在空位重生
+        if tuple(self.food.position) in self.obstacles.positions:
+            self.food.respawn(self.snake.body, self.obstacles.positions)
         
         self.steps += 1
         ate_food = False
