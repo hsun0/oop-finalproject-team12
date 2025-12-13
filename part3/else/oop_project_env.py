@@ -7,7 +7,7 @@ from gymnasium import spaces
 from gymnasium.envs.registration import register
 from gymnasium.utils.env_checker import check_env
 
-import warehouse_robot  as wr
+import part3.else.warehouse_robot  as wr
 import numpy as np
 
 # Register this module as a gym environment. Once registered, the id is usable in gym.make().

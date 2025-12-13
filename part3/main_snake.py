@@ -5,8 +5,15 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Type
 
-from snake_env import SnakeEnv
-from snake_agents import *
+from tools.snake_env import SnakeEnv
+from snake_agents import (
+    RandomAgent,
+    GreedyAgent,
+    RuleBasedAgent,
+    PathfindingAgent,
+    HamiltonianCycleAgent,
+    ReinforcementLearningAgent,
+)
 
 
 @dataclass
@@ -107,7 +114,7 @@ def run_demo(obstacles: bool = False, render: bool = False):
         ("2. Greedy Agent", GreedyAgent, 1),
         ("3. Rule-Based Agent", RuleBasedAgent, 1),
         ("4. Pathfinding Agent (BFS)", PathfindingAgent, 1),
-        ("5. Moving In Circles Agent", MovingInCirclesAgent, 1),
+        ("5. Hamiltonian Cycle Agent", HamiltonianCycleAgent, 1),
         ("6. Reinforcement Learning Agent", ReinforcementLearningAgent, 1),
     ]
 

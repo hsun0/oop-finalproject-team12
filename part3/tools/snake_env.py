@@ -2,9 +2,14 @@ import gymnasium as gym
 from gymnasium import spaces
 import pygame
 import random
+from tools.renderer import Renderer
+from policies.map import BaseMap, EmptyMap, ObstacleMap
+from policies.spawn import SpawnPolicy
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from snake_objects import Snake, RedFood, GoldFood, Obstacle
+from objects.snake import Snake
+from objects.food import RedFood, GoldFood
+from objects.obstacles import Obstacle
 
 class RewardPolicy(ABC):
     """Strategy interface to compute rewards/termination for each step."""
@@ -36,66 +41,6 @@ class ClassicRewardPolicy(RewardPolicy):
         return reward, terminated, truncated
 
 
-class Renderer:
-    """Encapsulate pygame drawing to keep env logic clean."""
-
-    def __init__(self, grid_size, cell_size, fps):
-        self.grid_size = grid_size
-        self.cell_size = cell_size
-        self.fps = fps
-        self.window = None
-        self.clock = None
-
-    def draw(self, snake, food, obstacles=None):
-        if self.window is None:
-            pygame.init()
-            self.window = pygame.display.set_mode((self.grid_size * self.cell_size, self.grid_size * self.cell_size))
-            self.clock = pygame.time.Clock()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-
-        self.window.fill((0, 0, 0))
-
-        fx, fy = food.position
-        food_color = getattr(food, "color", (255, 0, 0))
-        pygame.draw.rect(
-            self.window,
-            food_color,
-            (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
-        )
-
-        # 畫障礙物（支援彩色）
-        for item in obstacles:
-            # 支援兩種格式：((x,y), color) 或 (x,y)
-            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], tuple):
-                (ox, oy), col = item
-            else:
-                ox, oy = item
-                col = (100, 100, 100)
-            pygame.draw.rect(
-                self.window,
-                col,
-                (ox * self.cell_size, oy * self.cell_size, self.cell_size, self.cell_size),
-            )
-
-        for i, (bx, by) in enumerate(snake.body):
-            color = (0, 255, 0) if i == 0 else (0, 200, 0)
-            pygame.draw.rect(
-                self.window,
-                color,
-                (bx * self.cell_size, by * self.cell_size, self.cell_size, self.cell_size),
-            )
-
-        pygame.display.flip()
-        self.clock.tick(self.fps)
-
-    def close(self):
-        if self.window:
-            pygame.quit()
-
-
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
 
@@ -108,6 +53,8 @@ class SnakeEnv(gym.Env):
         reward_policy: RewardPolicy | None = None,
         gold_prob: float = 0.2,
         enable_obstacles: bool = False,
+        map_strategy: BaseMap | None = None,
+        spawn_policy: SpawnPolicy | None = None,
     ):
         super().__init__()
         self.grid_size = grid_size # 網格數量 (20x20)
@@ -134,17 +81,19 @@ class SnakeEnv(gym.Env):
             "body": spaces.Sequence(spaces.Box(0, grid_size, shape=(2,), dtype=int))
         })
 
+        # 初始化策略
+        self.map = map_strategy or (ObstacleMap(self.grid_size) if enable_obstacles else EmptyMap(self.grid_size))
+        self.spawn_policy = spawn_policy or SpawnPolicy(
+            max_cells=40 if enable_obstacles else 0,
+            spawn_chance=0.05 if enable_obstacles else 0.0,
+            despawn_chance=0.02 if enable_obstacles else 0.0,
+        )
+
         # 初始化物件
         self.snake = Snake(self.grid_size, self.grid_size)
         self.gold_prob = max(0.0, min(1.0, gold_prob))
         self.food = self._spawn_food()
-        self.obstacles = Obstacle(
-            self.grid_size,
-            self.grid_size,
-            max_obstacles=40 if enable_obstacles else 0,
-            spawn_chance=0.12 if enable_obstacles else 0.0,
-            despawn_chance=0.06 if enable_obstacles else 0.0,
-        )
+        self.obstacles = self.map.create_obstacles(self.spawn_policy)
         self.renderer = Renderer(self.grid_size, self.cell_size, self.metadata["render_fps"]) if render_mode == "human" else None
 
     def reset(self, seed=None, options=None):
