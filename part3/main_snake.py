@@ -91,7 +91,7 @@ def train_rl(model_path: str = "./rl_agent.pkl", episodes: int = 1000, epsilon: 
 
 
 def run_demo():
-    runner = GameRunner(render=False)
+    runner = GameRunner(render=True)
 
     scripts = [
         ("1. Random Agent", RandomAgent, 1),

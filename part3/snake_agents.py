@@ -39,6 +39,9 @@ class BaseAgent(ABC):
             return False
         if (x, y) in body:
             return False
+        obstacles = {tuple(p) for p in obs.get('obstacles', [])}
+        if (x, y) in obstacles:
+            return False
         return True
 
     def neighbors(self, head: tuple[int, int]):
@@ -136,9 +139,11 @@ class PathfindingAgent(BaseAgent):
         food = tuple(obs["food"])
         body = [tuple(p) for p in obs["body"]]
         w, h = obs["grid_size"]
+        obstacles = [tuple(p) for p in obs.get("obstacles", [])]
 
         # 將尾巴暫時視為可通行，因為下一步尾巴會移動 (簡化假設)
         blocked = set(body[:-1]) if len(body) > 1 else set()
+        blocked |= set(obstacles)
 
         path = self._bfs(head, food, blocked, w, h)
         if len(path) >= 2:

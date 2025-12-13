@@ -3,7 +3,7 @@ from gymnasium import spaces
 import pygame
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from snake_objects import Snake, Food
+from snake_objects import Snake, Food, Obstacle
 
 class RewardPolicy(ABC):
     """Strategy interface to compute rewards/termination for each step."""
@@ -45,7 +45,7 @@ class Renderer:
         self.window = None
         self.clock = None
 
-    def draw(self, snake, food):
+    def draw(self, snake, food, obstacles=None):
         if self.window is None:
             pygame.init()
             self.window = pygame.display.set_mode((self.grid_size * self.cell_size, self.grid_size * self.cell_size))
@@ -63,6 +63,14 @@ class Renderer:
             (255, 0, 0),
             (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
         )
+
+        # 畫障礙物
+        for ox, oy in obstacles:
+            pygame.draw.rect(
+                self.window,
+                (100, 100, 100),
+                (ox * self.cell_size, oy * self.cell_size, self.cell_size, self.cell_size),
+            )
 
         for i, (bx, by) in enumerate(snake.body):
             color = (0, 255, 0) if i == 0 else (0, 200, 0)
@@ -119,12 +127,14 @@ class SnakeEnv(gym.Env):
         # 初始化物件
         self.snake = Snake(self.grid_size, self.grid_size)
         self.food = Food(self.grid_size, self.grid_size)
+        self.obstacles = Obstacle(self.grid_size, self.grid_size)
         self.renderer = Renderer(self.grid_size, self.cell_size, self.metadata["render_fps"]) if render_mode == "human" else None
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.snake.reset()
-        self.food.respawn(self.snake.body)
+        self.obstacles.reset()
+        self.food.respawn(self.snake.body, self.obstacles.positions)
         self.score = 0
         self.steps = 0
         return self._get_obs(), {}
@@ -135,15 +145,22 @@ class SnakeEnv(gym.Env):
         
         # 2. 移動蛇
         self.snake.move()
+
+        # 更新障礙物
+        self.obstacles.update(self.snake.body, self.food.position)
         
         self.steps += 1
         ate_food = False
         died = not self.snake.alive
 
+        # 障礙物碰撞
+        if not died and self.obstacles and self.obstacles.check_collision(self.snake.head):
+            died = True
+
         if not died and self.snake.head == self.food.position:
             ate_food = True
             self.snake.grow()
-            self.food.respawn(self.snake.body)
+            self.food.respawn(self.snake.body, self.obstacles.positions)
             self.score += 1
 
         reward, terminated, truncated = self.reward_policy.compute(
@@ -167,11 +184,12 @@ class SnakeEnv(gym.Env):
             "body": list(self.snake.body),
             "grid_size": (self.grid_size, self.grid_size), # 方便 Agent 判斷邊界
             "direction": self.snake.direction,
+            "obstacles": list(self.obstacles.positions),
         }
 
     def render(self):
         if self.renderer:
-            self.renderer.draw(self.snake, self.food)
+            self.renderer.draw(self.snake, self.food, self.obstacles.positions)
 
     def close(self):
         if self.renderer:
