@@ -5,6 +5,7 @@ import random
 from tools.renderer import Renderer
 from policies.map import BaseMap, EmptyMap, ObstacleMap
 from policies.spawn import SpawnPolicy
+from objects.evolution import ConwayEvolutionPolicy, NoEvolutionPolicy
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from objects.snake import Snake
@@ -53,6 +54,7 @@ class SnakeEnv(gym.Env):
         reward_policy: RewardPolicy | None = None,
         gold_prob: float = 0.2,
         enable_obstacles: bool = False,
+        evolution_mode: str | None = None,
         map_strategy: BaseMap | None = None,
         spawn_policy: SpawnPolicy | None = None,
     ):
@@ -88,12 +90,17 @@ class SnakeEnv(gym.Env):
             spawn_chance=0.05 if enable_obstacles else 0.0,
             despawn_chance=0.02 if enable_obstacles else 0.0,
         )
+        # Evolution policy selection
+        if (evolution_mode or "conway").lower() == "none":
+            evo_policy = NoEvolutionPolicy()
+        else:
+            evo_policy = ConwayEvolutionPolicy()
 
         # 初始化物件
         self.snake = Snake(self.grid_size, self.grid_size)
         self.gold_prob = max(0.0, min(1.0, gold_prob))
         self.food = self._spawn_food()
-        self.obstacles = self.map.create_obstacles(self.spawn_policy)
+        self.obstacles = self.map.create_obstacles(self.spawn_policy, evolution_policy=evo_policy)
         self.renderer = Renderer(self.grid_size, self.cell_size, self.metadata["render_fps"]) if render_mode == "human" else None
 
     def reset(self, seed=None, options=None):
