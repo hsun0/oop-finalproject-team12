@@ -1,0 +1,5 @@
+gymnasium[classic_control]
+numpy
+matplotlib
+pygame
+optuna
