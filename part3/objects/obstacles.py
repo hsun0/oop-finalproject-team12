@@ -86,7 +86,7 @@ class Obstacle(GridObject):
             acc += p
             if r < acc:
                 return cls
-        return SingleObstacle
+        return random.choice(list(self.shape_probs.keys()))
 
     @staticmethod
     def _neighbors8(cell):

@@ -10,13 +10,6 @@ class ObstacleShape(ABC):
     def shape_cells(self, x: int, y: int):
         """回傳以 (x,y) 為參考點的格子座標清單。"""
         raise NotImplementedError
-    
-
-class SingleObstacle(ObstacleShape):
-    def shape_cells(self, x: int, y: int):
-        return [(x, y)]
-    color = (160, 160, 160)
-    static = True
 
 
 class LShapeObstacle(ObstacleShape):
