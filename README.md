@@ -178,3 +178,13 @@ python main_snake.py --mode train --episodes 2000 --obstacles --render
 訓練完成後會在 `part3` 輸出 `rl_agent.pkl`，包含 Q-table 與相關超參數，之後在 demo 模式選到 RL 時會自動載入此模型。
 
 ---
+
+## Contribution Table
+
+
+| 學號 / 姓名 | Part 1                           | Part 2                                                     | Part 3                                                                  |
+|-------------|-----------------------------------------------|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| B123040045 林柏儒 | 環境安裝測試      | 結果分析                         | 對obstacle進行如康威生命遊戲的規則與不同食物類別                                 |
+| B123040048 吳紹彰 | 環境安裝測試                | Optuna 調整超參數與randomseed 規則                    | 完成底層架構及其method如GameRunner、 Snake、Food、Snake的Env、RandomAgent、GreedyAgent、RuleBasedAgent、PathfindingAgent與新增obstacle         |
+| B123040053 張承勛 | 環境安裝測試              | FrozenLake reward 設計與Optuna 調整超參數                        | 重構整個專案使其更加模組化以及將物件拆分、新增更進階agent如hamiltonian_cycle_agent與reinforcement_learning_agent、對obstacle 的evolution新增更多的規則與behavior         |
+
