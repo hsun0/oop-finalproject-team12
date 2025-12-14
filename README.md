@@ -1,91 +1,190 @@
-# Group Project Setup Guide
+# OOP Group Project 說明
 
-## Project Content
-- Gymnasium v1.2.2
-- Part1 Sample Code
-- Part2 Sample Code
-- Part3 Sample Code
-  
-## Installation
+
+- **Part 1**：環境測試。
+- **Part 2**：目的提升 FrozenLake-v1的成功率並維持穩定。
+- **Part 3**：自行設計貪食蛇環境，遵守 Gym 的 Env interface（reset/step/render），並透過多個 Agent 與class展示多種OOP 概念。
+
+---
+
+## 環境
+
+- Python 3.10+（使用虛擬環境）
+- 套件：
+	- `gymnasium`
+	- `gymnasium[classic_control]`
+	- `numpy`
+	- `matplotlib`
+	- `pygame`（Part 3 繪圖用）
+	- `optuna`（Part 2 超參數）
+
+### 建立與啟動虛擬環境
+
+在 `OOP-Group-Project` 下：
 
 ```bash
-# 1. Create a virtual environment
 python -m venv .venv
+source .venv/bin/activate  # Windows用 .venv\Scripts\activate
+```
 
-# 2. Activate the virtual environment
-source .venv/bin/activate
+### 安裝套件
 
-# 3. Navigate to the Gymnasium directory
-cd group_project/Gymnasium
-
-# 4. Install Gymnasium in editable mode
+```bash
+cd Gymnasium
 pip install -e .
 
-# 5. Install additional dependencies
-pip install "gymnasium[classic_control]"
-pip install matplotlib
+
+cd ..
+pip install -r requirements.txt
 ```
+
+
 
 ---
 
-## ✅ Verification
+## 執行方式
 
-Run the following command to verify that the installation is successful:
+### Part 1
 
-```bash
-% pip list
-```
-
-Sample Output from MacOS:
-
-```
-Package              Version Editable project location
--------------------- ------- --------------------------------------------
-cloudpickle          3.1.2
-Farama-Notifications 0.0.4
-gymnasium            1.2.2   ./group_project/Gymnasium
-numpy                2.3.5
-pip                  24.3.1
-typing_extensions    4.15.0
-```
-
-If your output matches the above (or is similar), your environment is correctly configured.
-
----
-
-## 🚀 Running the Project
-
-### **Part 1: Mountain Car**
-Train and test the reinforcement learning agent:
 
 ```bash
-# Train the agent
+cd part1
+
 python mountain_car.py --train --episodes 5000
 
-# Render and visualize performance
 python mountain_car.py --render --episodes 10
 ```
 
-### **Part 2: Frozen Lake**
-Run the Frozen Lake environment:
+
+---
+
+### Part 2：Frozen Lake
+
+主要程式：
+- Train 與 test：`part2/frozen_lake.py`
+- 使用 Optuna 進行超參數：`part2/hypera.py`
+
+#### 直接進行Train 與 test
 
 ```bash
+cd ../part2
+
+# 會先訓練 15000 episode，再以 750 episode進行testing
 python frozen_lake.py
 ```
 
-### **Part 3: OOP Project Environment**
-Execute the custom OOP environment:
+- 執行完畢後：
+	- 會輸出 `frozen_lake8x8.pkl`（Q-table）、`frozen_lake8x8.png`（訓練 moving-average 曲線）。
+	- 終端機會顯示測試階段的成功率。
+
+#### 使用Optuna超參數
 
 ```bash
-python oop_project_env.py
+cd ../part2
+python hypera.py
 ```
 
-**Tip:**  
-If you’re on Windows, replace  
-```bash
-source .venv/bin/activate
-```  
-with  
-```bash
-.venv\Scripts\activate
+- `hypera.py` 使用 Optuna 對以下超參數搜尋：
+	- `min_exploration_rate`
+	- `epsilon_decay_rate`
+	- `discount_factor_g`
+	- `start_learning_rate_a`
+	- `min_learning_rate_a`
+	- `learning_decay_rate`
+- 每次 trial 的超參數與對應成功率會寫入 `results.csv`。
+
+---
+
+### Part 3：Snake OOP Project（自訂環境 + 多個 Agent）
+
+主程式：`part3/main_snake.py`
+
+---
+
+### Part 3 結構
+
+
+
+```text
+part3/
+├── main_snake.py          # 程式的entrance：CLI、GameRunner
+│
+├── tools/                 # 與環境執行相關的工具
+│   ├── snake_env.py       # 自訂 SnakeEnv，使其有Gymnasium Env interface（reset/step/render）
+│   └── renderer.py        # 使用 pygame 圖像化
+│
+├── objects/               # 環境中的各種物件（Abstraction + Inheritence + Encapsulation）
+│   ├── base.py            # 物件的abstract class
+│   ├── snake.py           # Snake class：管理身體、移動、變長與碰撞
+│   ├── food.py            # 一般食物與特殊食物class
+│   ├── obstacles.py       # 障礙物：生成、更新與碰撞檢查
+│   ├── obstacle_shape.py  # 障礙物形狀定義
+│   └── evolution.py       # 障礙物演化規則（Strategy / polymorphism）
+│
+├── snake_agents/          # 各種 Agent 策略
+│   ├── base_agent.py              # BaseAgent 的abstract class
+│   ├── random_agent.py            # 隨機移動Agent
+│   ├── greedy_agent.py            # 單純往食物最近方向移動
+│   ├── rule_based_agent.py        # 有安全檢查的規則的 Agent
+│   ├── pathfinding_agent.py       # 使用 BFS 方法找到食物
+│   ├── hamiltonian_cycle_agent.py # 依漢米爾頓路徑走格子，避免撞到自己
+│   └── reinforcement_learning_agent.py # 用 Q-Learning 更新與模型存取的強化學習 Agent
+│
+└── else/                   # 原有範例程式
+	├── oop_project_env.py
+	└── warehouse_robot.py
 ```
+
+#### Demo：展示多種 Agent（著重 OOP 多型）
+
+```bash
+cd ../part3
+
+# 預設 demo（不顯示畫面，會輸出分數）
+python main_snake.py --mode demo
+
+# Demo 並啟用障礙物
+python main_snake.py --mode demo --obstacles
+
+# Demo + 啟用障礙物 + 顯示 pygame 畫面
+python main_snake.py --mode demo --obstacles --render
+```
+
+在 demo 模式，程式會依序展示：
+
+1. `RandomAgent`
+2. `GreedyAgent`
+3. `RuleBasedAgent`
+4. `PathfindingAgent (BFS)`
+5. `HamiltonianCycleAgent`
+6. `ReinforcementLearningAgent`（若事先訓練過則會載入 Q-table）
+
+
+#### 訓練強化學習 Agent
+
+```bash
+cd ../part3
+
+# 基本訓練（不顯示畫面）
+python main_snake.py --mode train --episodes 10000
+
+# 啟用障礙物並訓練
+python main_snake.py --mode train --episodes 10000 --obstacles
+
+# 訓練時顯示動畫
+python main_snake.py --mode train --episodes 2000 --obstacles --render
+```
+
+訓練完成後會在 `part3` 輸出 `rl_agent.pkl`，包含 Q-table 與相關超參數，之後在 demo 模式選到 RL 時會自動載入此模型。
+
+---
+
+## Contribution Table
+
+
+| 學號 / 姓名 | Part 1                           | Part 2                                                     | Part 3                                                                  |
+|-------------|-----------------------------------------------|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| B123040045 林柏儒 | 環境安裝測試      | 結果分析                         | 對obstacle進行如康威生命遊戲的規則與不同食物類別                                 |
+| B123040048 吳紹彰 | 環境安裝測試                | Optuna 調整超參數與randomseed 規則                    | 完成底層架構及其method如GameRunner、 Snake、Food、Snake的Env、RandomAgent、GreedyAgent、RuleBasedAgent、PathfindingAgent與新增obstacle         |
+| B123040053 張承勛 | 環境安裝測試              | FrozenLake reward 設計與Optuna 調整超參數                        | 重構整個專案使其更加模組化以及將物件拆分、新增更進階agent如hamiltonian_cycle_agent與reinforcement_learning_agent、對obstacle 的evolution新增更多的規則與behavior         |
+
