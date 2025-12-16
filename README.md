@@ -3,7 +3,7 @@
 
 - **Part 1**：環境測試。
 - **Part 2**：目的提升 FrozenLake-v1的成功率並維持穩定。
-- **Part 3**：自行設計貪食蛇環境，遵守 Gym 的 Env interface（reset/step/render），並透過多個 Agent 與class展示多種OOP 概念。
+- **Part 3**：自行設計貪食蛇環境，遵守 Gym 的 Env interface（reset/step/render），並透過多個 Agent 與class展示多種OOP 概念，詳細實現參考`Reflection_Report.pdf`。
 
 ---
 
