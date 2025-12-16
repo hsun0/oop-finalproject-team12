@@ -146,8 +146,11 @@ python main_snake.py --mode demo
 # Demo 並啟用障礙物
 python main_snake.py --mode demo --obstacles
 
-# Demo + 啟用障礙物 + 顯示 pygame 畫面
-python main_snake.py --mode demo --obstacles --render
+# Demo 並啟用障礙物 + 障礙物按照康威生命遊戲規則變化
+python main_snake.py --mode demo --obstacles --evolution conway
+
+# Demo + 啟用障礙物 + 障礙物按照康威生命遊戲規則變化 + 顯示 pygame 畫面
+python main_snake.py --mode demo --obstacles --evolution conway --render
 ```
 
 在 demo 模式，程式會依序展示：
@@ -168,11 +171,11 @@ cd ../part3
 # 基本訓練（不顯示畫面）
 python main_snake.py --mode train --episodes 10000
 
-# 啟用障礙物並訓練
-python main_snake.py --mode train --episodes 10000 --obstacles
+# 啟用障礙物並訓練 + 障礙物按照康威生命遊戲規則變化
+python main_snake.py --mode train --episodes 10000 --obstacles --evolution conway
 
-# 訓練時顯示動畫
-python main_snake.py --mode train --episodes 2000 --obstacles --render
+# 訓練時顯示動畫 + 障礙物按照康威生命遊戲規則變化
+python main_snake.py --mode train --episodes 2000 --obstacles --evolution conway --render
 ```
 
 訓練完成後會在 `part3` 輸出 `rl_agent.pkl`，包含 Q-table 與相關超參數，之後在 demo 模式選到 RL 時會自動載入此模型。
