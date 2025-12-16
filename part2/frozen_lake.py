@@ -40,7 +40,7 @@ def print_success_rate(rewards_per_episode):
     print(f"✅ Success Rate: {success_rate:.2f}% ({int(success_count)} / {total_episodes} episodes)")
     return success_rate
 
-def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min_exploration_rate=0.0, epsilon=1.0, discount_factor_g=0.9, start_learning_rate_a=0.5, min_learning_rate_a=0.1, learning_decay_rate=0.0001):
+def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min_exploration_rate=0.0, epsilon=1.0, discount_factor_g=0.9, start_learning_rate_a=0.5, min_learning_rate_a=0.1, learning_decay_rate=0.0001, time_up_reward=0.5, hole_reward=0.35):
 
     env = gym.make('FrozenLake-v1', map_name="8x8", is_slippery=True, render_mode='human' if render else None)
 
@@ -58,18 +58,21 @@ def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min
     start_learning_rate_a = 0.5
     min_learning_rate_a = 0.1
     learning_rate_a = start_learning_rate_a
-    rng = np.random.default_rng(seed=123)   # random number generator
+    rng = np.random.default_rng(seed=257)   # random number generator
 
     rewards_per_episode = np.zeros(episodes)
+
+    goal_state = 63  # Bottom-right corner
+    grid_size = 8
+
+    bfs_distance = bfs_shortest_distances(goal_state, grid_size)
 
     for i in range(episodes):
         state = env.reset(seed=int(rng.integers(0, 10000)))[0]  # states: 0 to 63, 0=top left corner,63=bottom right corner
         terminated = False      # True when fall in hole or reached goal
         truncated = False       # True when actions > 200
 
-        goal_state = 63  # Bottom-right corner
-        grid_size = 8
-        shortest_distances = bfs_shortest_distances(goal_state, grid_size)
+        shortest_distances = bfs_distance
 
         while not terminated and not truncated:
             if is_training and rng.random() < epsilon:
@@ -79,10 +82,17 @@ def run(episodes, is_training=True, render=False, epsilon_decay_rate=0.0001, min
 
             new_state,reward,terminated,truncated,_ = env.step(action)
 
+            win = reward
+
             if is_training:
-                if terminated and reward == 0:
+                if terminated and not win:
                     distance_to_goal = shortest_distances[new_state // grid_size, new_state % grid_size]
-                    reward += (0.01 / (distance_to_goal + 1))  # Closer to goal gets higher reward
+                    reward += (hole_reward / (distance_to_goal + 1))  # Closer to goal gets higher reward
+                    pass
+                
+                if truncated and not win:
+                    distance_to_goal = shortest_distances[new_state // grid_size, new_state % grid_size]
+                    reward += (time_up_reward / (distance_to_goal + 1))  # Further from goal gets penalty
                     pass
 
             if is_training:
@@ -126,6 +136,21 @@ if __name__ == '__main__':
     start_learning_rate_a = 0.2144094441366212
     min_learning_rate_a = 0.005203841389229674
     learning_decay_rate = 0.0003221975772656527
+    hole_reward = 0.01
+    time_up_reward = 0
+    min_learning_rate_a,learning_decay_rate
 
-    run(15000, is_training=True, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=1.0, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
-    run(750, is_training=False, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=0.02, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate)
+    run(15000,
+        is_training=True,
+        render=False, 
+        epsilon_decay_rate=epsilon_decay_rate, 
+        min_exploration_rate=min_exploration_rate, 
+        epsilon=1.0,
+        discount_factor_g=discount_factor_g,
+        learning_decay_rate=learning_decay_rate,
+        start_learning_rate_a=start_learning_rate_a,
+        min_learning_rate_a=min_learning_rate_a,
+        time_up_reward=time_up_reward,
+        hole_reward=hole_reward)
+    
+    run(750, is_training=False, render=False, epsilon_decay_rate=epsilon_decay_rate, min_exploration_rate=min_exploration_rate, epsilon=0.02, discount_factor_g=discount_factor_g, learning_decay_rate=learning_decay_rate, start_learning_rate_a=start_learning_rate_a, min_learning_rate_a=min_learning_rate_a, time_up_reward=time_up_reward, hole_reward=hole_reward)

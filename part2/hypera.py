@@ -18,6 +18,8 @@ def objective(trial: optuna.Trial) -> float:
 	start_learning_rate_a = trial.suggest_float("start_learning_rate_a", 0.1, 0.9, log=True)
 	min_learning_rate_a = trial.suggest_float("min_learning_rate_a", 1e-4, 0.1, log=True)
 	learning_decay_rate = trial.suggest_float("learning_decay_rate", 1e-5, 1e-3, log=True)
+	time_up_reward = trial.suggest_float("time_up_reward", 0.01, 1.0, log=True)
+	hole_reward = trial.suggest_float("hole_reward", 0.01, 1.0, log=True)
 
 	episodes_train = 15000
 	episodes_test = 750
@@ -34,6 +36,8 @@ def objective(trial: optuna.Trial) -> float:
 			start_learning_rate_a=start_learning_rate_a,
             min_learning_rate_a=min_learning_rate_a,
             learning_decay_rate=learning_decay_rate,
+			time_up_reward=time_up_reward,
+			hole_reward=hole_reward,
 		)
 
 		# Test
@@ -47,13 +51,15 @@ def objective(trial: optuna.Trial) -> float:
 			start_learning_rate_a=start_learning_rate_a,
             min_learning_rate_a=min_learning_rate_a,
             learning_decay_rate=learning_decay_rate,
+			time_up_reward=time_up_reward,
+			hole_reward=hole_reward,
 		)
 		results.append(success_rate)
 		# Save results to a CSV file
 		with open("results.csv", mode="a", newline="") as file:
 			writer = csv.writer(file)
 			writer.writerow([epsilon_decay_rate, min_exploration_rate, discount_factor_g, 
-					 start_learning_rate_a, min_learning_rate_a, learning_decay_rate, success_rate])
+					 start_learning_rate_a, min_learning_rate_a, learning_decay_rate, time_up_reward, hole_reward, success_rate])
 
 	mean_success_rate = float(np.mean(results))
 	return mean_success_rate
@@ -64,7 +70,7 @@ def main():
 	with open("results.csv", mode="w", newline="") as file:
 		writer = csv.writer(file)
 		writer.writerow(["epsilon_decay_rate", "min_exploration_rate", "discount_factor_g", 
-						 "start_learning_rate_a", "min_learning_rate_a", "learning_decay_rate", "success_rate"])
+						 "start_learning_rate_a", "min_learning_rate_a", "learning_decay_rate", "", "time_up_reward", "hole_reward", "success_rate"])
 	study = optuna.create_study(direction="maximize")
 	study.optimize(objective, n_trials=10000)
 
